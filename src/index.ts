@@ -1,7 +1,8 @@
 import { google } from '@ai-sdk/google'
 import { openai } from '@ai-sdk/openai'
 import { perplexity } from '@ai-sdk/perplexity'
-import { generateText, tool } from 'ai'
+import { anthropic } from '@ai-sdk/anthropic'
+import { generateText, tool, Output } from 'ai'
 import 'dotenv/config'
 import { z } from 'zod'
  
@@ -125,22 +126,23 @@ Token Usage: 313 tokens (278 prompt + 35 completion) Finish Reason: stop
  */
 const main = async () => {
   const result = await generateText({
+    // model: anthropic("claude-3-7-sonnet-20250219"),
     model: openai("gpt-4o"),
-    prompt: "Get the weather in Auckland, NZ and La Union, Philippines, then add them together.",
+    prompt: `Get the weather in SF and NY, then add their temperatures together.`,
     maxSteps: 3,
     tools: {
       addNumbers: tool({
-        description: "Add two numbers together",
+        description: 'Add two numbers together',
         parameters: z.object({
           num1: z.number(),
           num2: z.number(),
         }),
         execute: async ({ num1, num2 }) => {
-          return num1 + num2;
+          return num1 + num2
         },
       }),
       getWeather: tool({
-        description: "Get the current weather at a location",
+        description: 'Get the current weather at a location',
         parameters: z.object({
           latitude: z.number(),
           longitude: z.number(),
@@ -148,22 +150,28 @@ const main = async () => {
         }),
         execute: async ({ latitude, longitude, city }) => {
           const response = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weathercode,relativehumidity_2m&timezone=auto`,
-          );
+            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weathercode,relativehumidity_2m&timezone=auto`
+          )
  
-          const weatherData = await response.json();
+          const weatherData = await response.json()
           return {
             temperature: weatherData.current.temperature_2m,
             weatherCode: weatherData.current.weathercode,
             humidity: weatherData.current.relativehumidity_2m,
             city,
-          };
+          }
         },
       }),
     },
+    experimental_output: Output.object({
+      schema: z.object({ sum: z.string() }),
+    }),
   });
-  console.log('Result Length : ', result.steps.length);
-  console.log('Result Text: ', result.text);
+    
+
+  console.log('🪵 Raw last step text:', result.steps[result.steps.length - 1]);
+  console.log('Result experimental_output: ', result.experimental_output);
+  
 };
 
 
