@@ -1,190 +1,252 @@
-import { google } from '@ai-sdk/google'
 import { openai } from '@ai-sdk/openai'
-import { perplexity } from '@ai-sdk/perplexity'
-import { anthropic } from '@ai-sdk/anthropic'
-import { generateText, tool, Output, generateObject } from 'ai'
-import 'dotenv/config'
+import { generateObject, generateText, tool } from 'ai'
 import { z } from 'zod'
+import 'dotenv/config'
+import * as fs from 'fs'
  
-// const main = async () => {
-//   const result = await generateText({
-//     model: openai('gpt-4o-mini'),
-//     prompt: 'When is the AI Engineer summit?',
-//   })
-//   console.log(result.text) // Open API has a context cut-off from 2024
-//   console.log(result.sources); 
-// }
-
-// const main = async () => {
-//   const result = await generateText({
-//     model: perplexity('sonar-pro'),
-//     prompt: 'Hello, world!',
-//   })
-//   console.log(result.text);
-//   console.
-  
-//   log(result.sources); // For Perplexity, this will include sources has web-search built in
-// }
+const mainModel = openai('gpt-4o');
  
-// const main = async () => {
-//   const result = await generateText({
-//     model: google('gemini-2.0-flash-001', { useSearchGrounding: true }),
-//     prompt: 'When is the AI Engineer summit?',
-//   })
-//   console.log(result.text)
-// }
-
-
-// Tools
-// With tools, you can allow the model to execute any arbitrary code, such as fetching data from an API or interacting with a database.
-// const main = async () => {
-//   const result = await generateText({
-//     model: openai("gpt-4o"),
-//     prompt: "What's 10 + 5?",
-//     tools: {
-//       addNumbers: tool({
-//         description: "Add two numbers together",
-//         parameters: z.object({
-//           num1: z.number(),
-//           num2: z.number(),
-//         }),
-//         execute: async ({ num1, num2 }) => {
-//           return num1 + num2;
-//         },
-//       }),
-//     },
-//   });
-//   console.log(result.toolResults);
-// };
-
+import Exa from 'exa-js'
  
-// const main = async () => {
-//   const result = await generateText({
-//     model: openai("gpt-4o"),
-//     prompt: "What's 10 + 5?",
-//     maxSteps: 2,
-//     tools: {
-//       addNumbers: tool({
-//         description: "Add two numbers together",
-//         parameters: z.object({
-//           num1: z.number(),
-//           num2: z.number(),
-//         }),
-//         execute: async ({ num1, num2 }) => {
-//           return num1 + num2;
-//         },
-//       }),
-//     },
-//   });
-//   console.log(result.steps.length);
-//   console.log(result.text);
-// };
-
-
-/**
- * AI Execution Steps Summary
-Step 1: Initial Tool Calls
-Type: Initial step Action: Called weather tools for both cities
-
-Tool Calls:
-
-getWeather for Auckland, NZ
-
-Latitude: -36.8485
-Longitude: 174.7633
-City: "Auckland"
-getWeather for La Union, Philippines
-
-Latitude: 16.6158
-Longitude: 120.3123
-City: "La Union"
-Results:
-
-Auckland Weather: 15.2°C, Weather Code: 61, Humidity: 77%
-La Union Weather: 28.4°C, Weather Code: 3, Humidity: 82%
-Token Usage: 171 tokens (96 prompt + 75 completion) Finish Reason: tool-calls
-
-Step 2: Addition Tool Call
-Type: Tool result processing Action: Added the two temperatures together
-
-Tool Call:
-
-addNumbers(15.2, 28.4)
-Result:
-
-Sum: 43.599999999999994
-Token Usage: 263 tokens (239 prompt + 24 completion) Finish Reason: tool-calls
-
-Step 3: Final Response
-Type: Tool result processing Action: Generated final human-readable response
-
-Final Answer: "The sum of the temperatures in Auckland, NZ (15.2°C) and La Union, Philippines (28.4°C) is approximately 43.6°C."
-
-Token Usage: 313 tokens (278 prompt + 35 completion) Finish Reason: stop
-
-
- */
-// const main = async () => {
-//   const result = await generateText({
-//     // model: anthropic("claude-3-7-sonnet-20250219"),
-//     model: openai("gpt-4o"),
-//     prompt: `Get the weather in SF and NY, then add their temperatures together.`,
-//     maxSteps: 3,
-//     tools: {
-//       addNumbers: tool({
-//         description: 'Add two numbers together',
-//         parameters: z.object({
-//           num1: z.number(),
-//           num2: z.number(),
-//         }),
-//         execute: async ({ num1, num2 }) => {
-//           return num1 + num2
-//         },
-//       }),
-//       getWeather: tool({
-//         description: 'Get the current weather at a location',
-//         parameters: z.object({
-//           latitude: z.number(),
-//           longitude: z.number(),
-//           city: z.string(),
-//         }),
-//         execute: async ({ latitude, longitude, city }) => {
-//           const response = await fetch(
-//             `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weathercode,relativehumidity_2m&timezone=auto`
-//           )
+const exa = new Exa(process.env.EXA_API_KEY)
  
-//           const weatherData = await response.json()
-//           return {
-//             temperature: weatherData.current.temperature_2m,
-//             weatherCode: weatherData.current.weathercode,
-//             humidity: weatherData.current.relativehumidity_2m,
-//             city,
-//           }
-//         },
-//       }),
-//     },
-//     experimental_output: Output.object({
-//       schema: z.object({ sum: z.string() }),
-//     }),
-//   });
-    
+const SYSTEM_PROMPT = `You are an expert researcher. Today is ${new Date().toISOString()}. Follow these instructions when responding:
+  - You may be asked to research subjects that is after your knowledge cutoff, assume the user is right when presented with news.
+  - The user is a highly experienced analyst, no need to simplify it, be as detailed as possible and make sure your response is correct.
+  - Be highly organized.
+  - Suggest solutions that I didn't think about.
+  - Be proactive and anticipate my needs.
+  - Treat me as an expert in all subject matter.
+  - Mistakes erode my trust, so be accurate and thorough.
+  - Provide detailed explanations, I'm comfortable with lots of detail.
+  - Value good arguments over authorities, the source is irrelevant.
+  - Consider new technologies and contrarian ideas, not just the conventional wisdom.
+  - You may use high levels of speculation or prediction, just flag it for me.
+  - Use Markdown formatting.`
 
-//   console.log('🪵 Raw last step text:', result.steps[result.steps.length - 1]);
-//   console.log('Result experimental_output: ', result.experimental_output);
-  
-// };
+type SearchResult = {
+  title: string
+  url: string
+  content: string
+}
 
+type Learning = {
+  learning: string
+  followUpQuestions: string[]
+}
+ 
+type Research = {
+  query: string | undefined
+  queries: string[]
+  searchResults: SearchResult[]
+  learnings: Learning[]
+  completedQueries: string[]
+}
+ 
+const accumulatedResearch: Research = {
+  query: undefined,
+  queries: [],
+  searchResults: [],
+  learnings: [],
+  completedQueries: [],
+}
+ 
+const searchWeb = async (query: string) => {
+  const { results } = await exa.searchAndContents(query, {
+    numResults: 1,
+    livecrawl: 'always', // ensure that it's live rather than cached (basically up to date info)
+  })
+  // Trims away irrelevant content to make search cheaper and results more focused
+  // example favicon URLs, etc. are not useful
+  return results.map(
+    (r) =>
+      ({
+        title: r.title,
+        url: r.url,
+        content: r.text,
+      }) as SearchResult
+  )
+}
 
-const main = async () => {
-  const result = await generateObject({
-    // model: openai("gpt-4o-mini"),
-    model: anthropic("claude-3-7-sonnet-20250219"),
-    prompt: "Please come up with 10 definitions for AI agents.",
+// const mainModel = anthropic("claude-3-7-sonnet-20250219");
+ 
+const generateSearchQueries = async (query: string, n: number = 3) => {
+  const {
+    object: { queries },
+  } = await generateObject({
+    model: mainModel,
+    prompt: `Generate ${n} search queries for the following query: ${query}`,
     schema: z.object({
-      definitions: z.array(z.string().describe("Use as much jargon as possible. It should be completely incoherent.")),
+      queries: z.array(z.string()).min(1).max(5),
     }),
   });
-  console.log(result.object.definitions);
-};
+  return queries;
+}
+
+const searchAndProcess = async (
+  query: string,
+  accumulatedSources: SearchResult[] 
+) => {
+  const pendingSearchResults: SearchResult[] = []
+  const finalSearchResults: SearchResult[] = []
+  await generateText({
+    model: mainModel,
+    prompt: `Search the web for information about ${query}`,
+    system:
+      'You are a researcher. For each query, search the web and then evaluate if the results are relevant and will help answer the following query',
+    maxSteps: 5,
+    tools: {
+      searchWeb: tool({
+        description: 'Search the web for information about a given query',
+        parameters: z.object({
+          query: z.string().min(1),
+        }),
+        async execute({ query }) {
+          const results = await searchWeb(query)
+          pendingSearchResults.push(...results)
+          return results
+        },
+      }),
+      evaluate: tool({
+        description: 'Evaluate the search results',
+        parameters: z.object({}),
+        async execute() {
+          const pendingResult = pendingSearchResults.pop()!
+          const { object: evaluation } = await generateObject({
+            model: mainModel,
+            prompt: `Evaluate whether the search results are relevant and will help answer the following query: ${query}. If the page already exists in the existing results, mark it as irrelevant.
  
-main();
+            <search_results>
+            ${JSON.stringify(pendingResult)}
+            </search_results>
+ 
+            <existing_results>
+            ${JSON.stringify(accumulatedSources.map((result) => result.url))}
+            </existing_results>
+ 
+            `,
+            output: 'enum',
+            enum: ['relevant', 'irrelevant'],
+          })
+          if (evaluation === 'relevant') {
+            finalSearchResults.push(pendingResult)
+          }
+          console.log('Found:', pendingResult.url)
+          console.log('Evaluation completed:', evaluation)
+          return evaluation === 'irrelevant'
+            ? 'Search results are irrelevant. Please search again with a more specific query.'
+            : 'Search results are relevant. End research for this query.'
+        },
+      }),
+    },
+  })
+  return finalSearchResults
+}
+
+const generateLearnings = async (query: string, searchResult: SearchResult) => {
+  const { object } = await generateObject({
+    model: mainModel,
+    prompt: `The user is researching "${query}". The following search result were deemed relevant.
+    Generate a learning and a follow-up question from the following search result:
+ 
+    <search_result>
+    ${JSON.stringify(searchResult)}
+    </search_result>
+    `,
+    schema: z.object({
+      learning: z.string(),
+      followUpQuestions: z.array(z.string()),
+    }),
+  })
+  return object
+}
+
+const deepResearch = async (
+  prompt: string,
+  depth: number = 2,
+  breadth: number = 2
+) => {
+  if (!accumulatedResearch.query) {
+    accumulatedResearch.query = prompt
+  }
+ 
+  if (depth === 0) {
+    return accumulatedResearch
+  }
+ 
+  const queries = await generateSearchQueries(prompt, breadth)
+  accumulatedResearch.queries = queries
+ 
+  for (const query of queries) {
+    console.log(`Searching the web for: ${query}`)
+    const searchResults = await searchAndProcess(
+
+      query, 
+      accumulatedResearch.searchResults 
+    ) 
+    accumulatedResearch.searchResults.push(...searchResults)
+    for (const searchResult of searchResults) {
+      console.log(`Processing search result: ${searchResult.url}`)
+      const learnings = await generateLearnings(query, searchResult)
+      accumulatedResearch.learnings.push(learnings)
+      accumulatedResearch.completedQueries.push(query)
+ 
+      const newQuery = `Overall research goal: ${prompt}
+        Previous search queries: ${accumulatedResearch.completedQueries.join(', ')}
+ 
+        Follow-up questions: ${learnings.followUpQuestions.join(', ')}
+        `
+      await deepResearch(newQuery, depth - 1, Math.ceil(breadth / 2))
+    }
+  }
+  return accumulatedResearch
+}
+
+const generateReport = async (research: Research) => {
+  const { text } = await generateText({
+    model: openai('o3-mini'),
+    system: SYSTEM_PROMPT,
+    prompt:
+      'Generate a report based on the following research data:\n\n' +
+      JSON.stringify(research, null, 2),
+  })
+  return text
+}
+
+const main = async () => {
+  const research = await deepResearch(
+    'What do you need to be a high-level, world-class Brazilian Jiu-Jitsu athlete?'
+  )
+  console.log('Research completed!')
+  console.log('Generating report...')
+  const report = await generateReport(research)
+  console.log('Report generated! report.md')
+  fs.writeFileSync('report.md', report)
+}
+ 
+main()
+ 
+// const main = async () => {
+//   const prompt = 'What do you need to be a high-level, world-class Brazilian Jiu-Jitsu athlete?'
+//   const research = await deepResearch(prompt)
+// }
+ 
+// main();
+
+// const main = async () => {
+//   const prompt = 'What do you need to be a high-level, world-class Brazilian Jiu-Jitsu athlete?'
+//   const queries = await generateSearchQueries(prompt)
+ 
+//   for (const query of queries) {
+//     console.log(`Searching the web for: ${query}`)
+//     const searchResults = await searchAndProcess(query);ß
+//     console.log('searchResults', searchResults);
+//     for (const searchResult of searchResults) {
+//       console.log(`Processing search result: ${searchResult.url}`)
+//       const learnings = await generateLearnings(query, searchResult);
+//       console.log('Learnings:', learnings.learning);
+//     }
+//   }
+// }
+ 
+// main();
